@@ -1,0 +1,73 @@
+#!/bin/busybox sh
+# Diagnostic init for the mirror, in place of Android's ramdisk: the mirror
+# has no serial console, so this writes what the kernel saw to the start of
+# the SD's backup partition, which Android never uses. Twice: after 25 s and
+# after 90 s, for drivers that probe late. Then it reboots, so a mirror that
+# runs this from its recovery partition (adb reboot recovery) comes back to
+# its normal boot, where adb reads the report back.
+/bin/busybox --install -s /bin
+export PATH=/bin
+mkdir -p /proc /sys /dev /tmp
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
+
+report() {
+    echo "YUPPDIAG $1"
+    cat /proc/version /proc/cmdline
+    echo "-- tree the kernel got"; cat /proc/device-tree/model; echo
+    echo "-- misc before clearing (bootloader message)"
+    for d in /sys/class/block/*; do
+        grep -q '^PARTNAME=misc$' "$d/uevent" 2>/dev/null && dd if=/dev/${d##*/} bs=32 count=1 2>/dev/null | od -c | head -2
+        grep -q '^PARTNAME=misc$' "$d/uevent" 2>/dev/null && dd if=/dev/${d##*/} bs=1024 skip=16 count=1 2>/dev/null | od -c | head -2
+    done
+    echo "-- uptime"; cat /proc/uptime
+    echo "-- partitions"; cat /proc/partitions
+    echo "-- partition names"
+    for d in /sys/class/block/*; do echo "${d##*/} $(grep -E '^PARTNAME=' "$d/uevent")"; done
+    echo "-- deferred probes"; cat /sys/kernel/debug/devices_deferred 2>&1
+    echo "-- regulators"; cat /sys/kernel/debug/regulator/regulator_summary 2>&1 | head -80
+    echo "-- dmesg"; dmesg
+    echo "YUPPEND"
+}
+
+write() {
+    dev=
+    for d in /sys/class/block/*; do
+        grep -q '^PARTNAME=backup$' "$d/uevent" 2>/dev/null && dev=/dev/${d##*/}
+    done
+    report "$1" >/tmp/diag.txt 2>&1
+    if [ -n "$dev" ]; then
+        dd if=/tmp/diag.txt of="$dev" bs=4096 conv=fsync 2>/dev/null
+        sync
+    fi
+}
+
+# A sign of life that needs no SD: the red LED (GPIO1_A1, gpio 33) blinks
+# fast while this runs, through the LED class when the tree has the LED,
+# through sysfs GPIO when nothing holds the line.
+blink() {
+    led=/sys/class/leds/yupp:red
+    if [ -d $led ]; then
+        echo none >$led/trigger
+        while true; do echo 1 >$led/brightness; sleep 0.2; echo 0 >$led/brightness; sleep 0.2; done
+    else
+        echo 33 >/sys/class/gpio/export 2>/dev/null
+        echo out >/sys/class/gpio/gpio33/direction 2>/dev/null
+        while true; do echo 1 >/sys/class/gpio/gpio33/value; sleep 0.2; echo 0 >/sys/class/gpio/gpio33/value; sleep 0.2; done
+    fi
+}
+blink &
+
+sleep 25
+write 25s
+sleep 65
+write 90s
+# adb reboot recovery leaves "boot-recovery" in misc for the recovery to
+# clear; this is no recovery, so it clears it, or every boot would come back.
+for d in /sys/class/block/*; do
+    grep -q '^PARTNAME=misc$' "$d/uevent" 2>/dev/null && dd if=/dev/zero of=/dev/${d##*/} bs=4096 count=8 conv=fsync 2>/dev/null
+done
+sync
+reboot -f

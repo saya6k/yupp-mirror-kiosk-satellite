@@ -1,0 +1,6 @@
+# The mirror's volume up, volume down and Bluetooth buttons (yupp-buttons.c).
+service yupp_buttons /system/bin/yupp-buttons
+    class core
+    user root
+    group root input
+    seclabel u:r:su:s0

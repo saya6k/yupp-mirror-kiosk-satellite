@@ -1,0 +1,43 @@
+#!/system/bin/sh
+# Bring-up access for the mirror. For 15 minutes after /data is up, every
+# 20 s: snapshot the state to /metadata/yupp, join the Wi-Fi once Android's
+# Wi-Fi service answers, and open adb on Wi-Fi once wlan0 has an address.
+# @SSID@ and @PSK@ are filled in when the image is made.
+D=/metadata/yupp
+mkdir -p $D
+log() { echo "$(date '+%F %T') $*" >>$D/remote.log; }
+snapshot() {
+    getprop >$D/props.txt 2>&1
+    dmesg >$D/dmesg.tmp 2>&1; tail -n 3000 $D/dmesg.tmp >$D/dmesg.txt; rm -f $D/dmesg.tmp
+    logcat -d -b main,system,crash -t 4000 >$D/logcat.txt 2>&1
+    ps -A >$D/ps.txt 2>&1
+    ip addr >$D/ip.txt 2>&1
+    sync
+}
+
+log "start, boot_completed=$(getprop sys.boot_completed)"
+joined=0
+adb=0
+i=0
+while [ $i -lt 45 ]; do
+    snapshot
+    if [ $joined = 0 ] && cmd wifi status >/dev/null 2>&1; then
+        cmd wifi set-wifi-enabled enabled >>$D/remote.log 2>&1
+        if cmd wifi list-networks 2>/dev/null | grep -q '@SSID@'; then
+            log "network saved already"
+        else
+            cmd wifi connect-network '@SSID@' wpa2 '@PSK@' >>$D/remote.log 2>&1
+            log "connect requested"
+        fi
+        joined=1
+    fi
+    if [ $adb = 0 ] && ip -4 addr show wlan0 2>/dev/null | grep -q 'inet '; then
+        setprop service.adb.tcp.port 5555
+        setprop ctl.restart adbd
+        log "adb on $(ip -4 addr show wlan0 | grep -o 'inet [0-9.]*'):5555"
+        adb=1
+    fi
+    i=$((i + 1))
+    sleep 20
+done
+log "done"

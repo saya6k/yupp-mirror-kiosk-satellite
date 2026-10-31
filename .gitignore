@@ -9,3 +9,6 @@ issues/
 AGENTS.md
 __pycache__/
 handoff*
+
+# YUPP: built from yupp/diag/reboot-to.c
+yupp/diag/reboot-to

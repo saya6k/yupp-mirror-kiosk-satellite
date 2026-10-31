@@ -1,0 +1,15 @@
+# The mirror has no touch, serial console or USB to the outside, so nothing
+# can be allowed or joined on its screen, and a boot that never completes
+# shows nothing. yupp-remote.sh starts once /data is up, without waiting for
+# the boot to complete: it joins the mirror's Wi-Fi, opens adb on Wi-Fi
+# (port 5555) and keeps a diagnostic snapshot in /metadata/yupp, which the
+# Mac can read off the SD.
+service yupp_remote /system/bin/sh /system/etc/yupp-remote.sh
+    user root
+    group root
+    seclabel u:r:su:s0
+    oneshot
+    disabled
+
+on post-fs-data
+    start yupp_remote

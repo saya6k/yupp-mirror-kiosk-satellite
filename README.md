@@ -18,6 +18,12 @@
 <a href="https://buymeacoffee.com/jxlarrea"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee"></a>
 </p>
 
+> [!NOTE]
+> This fork adds the YUPP BM-S-21E1 smart mirror (SMDT AIoT-3399X, RK3399): an Android 11 image
+> running Kiosk Satellite. Its work lives in [yupp/](yupp/README.md); everything else is
+> [jxlarrea/lineageos-echo-kiosk-satellite](https://github.com/jxlarrea/lineageos-echo-kiosk-satellite)
+> as it is.
+
 LineageOS 18.1 (Android 11) images for Amazon Echo devices, tuned to run [Kiosk Satellite](https://github.com/jxlarrea/kiosk-satellite) for Home Assistant. The Echo Shows run the full Kiosk Satellite experience on their screens. The Echo Dot has no screen, so it runs Kiosk Satellite headless as a voice satellite, intercom and speaker. Every image is built from one shared base, [R0rt1z2](https://github.com/R0rt1z2)'s LineageOS 18.1 port for the MT8163 Echos in [amazon-oss](https://github.com/amazon-oss), with a Kiosk Satellite Edition layer on top.
 
 | Device | Codename | Status | Guide |

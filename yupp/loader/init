@@ -1,0 +1,112 @@
+#!/bin/busybox sh
+# The mirror's first stage. Rockchip's U-Boot stops on the mirror's own tree,
+# so it boots the Rock Pi's (the resource's rk-kernel.dtb), and this restarts
+# the same kernel with the mirror's tree through kexec, in two steps:
+#
+#   1. On the Rock Pi's tree: restart on the mirror's tree with this same
+#      ramdisk (repacked from the running root) and yupp.stage=2.
+#        - the kernel comes out of the boot partition (header v2, page 2048)
+#        - /yupp.dtb gets what U-Boot puts in a tree (memory, serial number)
+#          from the tree U-Boot just handed over
+#        - the command line is the running one, with the boot devices
+#   2. On the mirror's tree: let the kernel bring the display up, then restart
+#      once more, on the same tree (/sys/firmware/fdt), with Android's ramdisk.
+#
+# Why twice: the GM8775C only reliably takes the mirror's configuration from a
+# kernel that starts with the mirror's display already up and its rails
+# steady (a restart from a running mirror kernel always worked; straight from
+# the Rock Pi's tree it sometimes left the panel on its self test, with every
+# DSI and GPIO register the same as in a good boot).
+#
+# Anything failing falls back to Android on the tree running at that point.
+# Each step is logged to the start of the backup partition, which Android
+# never uses, so a run can be read back afterwards.
+/bin/busybox --install -s /bin
+export PATH=/bin
+mkdir -p /proc /sys /dev /tmp
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+
+KX="/kx/ld-musl-aarch64.so.1 --library-path /kx"
+stage=1
+grep -q 'yupp.stage=2' /proc/cmdline && stage=2
+
+part() {
+    for d in /sys/class/block/*; do
+        grep -q "^PARTNAME=$1\$" "$d/uevent" 2>/dev/null && echo /dev/${d##*/}
+    done
+}
+backup=$(part backup)
+log() {
+    echo "yupp-loader: stage $stage: $*" >/dev/kmsg
+    echo "$(cut -d' ' -f1 /proc/uptime) stage $stage: $*" >>/tmp/loader.log
+    [ -n "$backup" ] && { echo YUPPLOADER; cat /tmp/loader.log; echo YUPPEND; } |
+        dd of="$backup" bs=4096 conv=sync,fsync 2>/dev/null
+}
+
+fallback() {
+    log "$1, booting Android on this tree"
+    cd / && gzip -dc /android-ramdisk.img | cpio -idmu 2>/dev/null
+    rm -rf /kx /yupp.dtb /android-ramdisk.img
+    umount /dev /sys /proc
+    exec /init
+}
+
+log "start, tree: $(tr -d '\0' </proc/device-tree/model)"
+boot=$(part boot)
+[ -n "$boot" ] || fallback "no boot partition"
+
+# The kernel's size is the header's u32 at byte 8; it starts at page 1.
+ksize=$(dd if="$boot" bs=1 skip=8 count=4 2>/dev/null | od -An -tu4 | tr -d ' ')
+[ -n "$ksize" ] && [ "$ksize" -gt 0 ] || fallback "bad boot header"
+dd if="$boot" of=/tmp/Image bs=2048 skip=1 count=$(( (ksize + 2047) / 2048 )) 2>/dev/null
+truncate -s "$ksize" /tmp/Image
+
+if [ $stage = 1 ]; then
+    # Device tree cells are big-endian: read bytes, four to a cell.
+    cells() { od -An -v -tx1 "$1" | awk '{for (i = 1; i <= NF; i++) { c = c $i; if (++n % 4 == 0) { printf "0x%s ", c; c = "" } } }'; }
+
+    cp /yupp.dtb /tmp/next.dtb
+    dt=/proc/device-tree
+    $KX /kx/fdtput -c /tmp/next.dtb /memory 2>/dev/null
+    $KX /kx/fdtput -t s /tmp/next.dtb /memory device_type memory
+    $KX /kx/fdtput -t x /tmp/next.dtb /memory reg $(cells $dt/memory/reg) || fallback "memory node"
+    [ -f $dt/serial-number ] && $KX /kx/fdtput -t s /tmp/next.dtb / serial-number "$(tr -d '\0' <$dt/serial-number)"
+
+    # This kernel runs with the DSI outputs off (video=DSI-n:d in the boot
+    # image's command line): on the Rock Pi's tree it would drive DSI0 and
+    # DSI1 as a dual channel 720p panel, and the GM8775C then never takes the
+    # mirror's configuration. The mirror's kernel gets its outputs back.
+    cmdline="$(sed -e 's/ *video=DSI-[0-9]:d//g' /proc/cmdline) yupp.stage=2"
+    # Android's first stage finds super only on the boot devices the command
+    # line names. U-Boot adds them (bootargs_ext) when it boots the boot
+    # partition, not the recovery partition, which bring-up runs this from.
+    case "$cmdline" in
+    *androidboot.boot_devices=*) ;;
+    *) cmdline="$cmdline androidboot.boot_devices=fe330000.sdhci,fe320000.dwmmc" ;;
+    esac
+
+    # This ramdisk again, from the running root.
+    (cd / && find . -xdev \( -path ./proc -o -path ./sys -o -path ./dev -o -path ./tmp \) -prune -o -print |
+        cpio -o -H newc 2>/dev/null | gzip -1 >/tmp/next.rd) || fallback "repacking the ramdisk"
+    initrd=/tmp/next.rd
+else
+    # Wait for the display to come up on this tree, then give it a moment.
+    i=0
+    while [ $i -lt 50 ] && [ "$(cat /sys/class/drm/card0-DSI-1/enabled 2>/dev/null)" != enabled ]; do
+        sleep 0.2; i=$((i + 1))
+    done
+    log "display $(cat /sys/class/drm/card0-DSI-1/enabled 2>/dev/null) after $((i / 5)) s"
+    sleep 2
+    cp /sys/firmware/fdt /tmp/next.dtb || fallback "no live tree"
+    cmdline="$(sed -e 's/ *yupp.stage=2//' /proc/cmdline)"
+    initrd=/android-ramdisk.img
+fi
+
+$KX /kx/kexec -l /tmp/Image --dtb=/tmp/next.dtb --initrd=$initrd \
+    --command-line="$cmdline" >>/tmp/loader.log 2>&1 || fallback "kexec load failed"
+log "loaded, restarting"
+sync
+$KX /kx/kexec -e >>/tmp/loader.log 2>&1
+fallback "kexec -e returned"
