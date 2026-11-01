@@ -1,0 +1,78 @@
+# What patch-images.sh leaves out of Radxa's images: what upstream's Echo
+# Shows leave out (common/Android.bp, overrides), here by the names of
+# Radxa's Google apps, and every Google app besides, since upstream has none.
+# Like upstream, SystemUI, WebView (LineageOS's, in place of Google's),
+# Settings, the keyboard, the launcher, the file picker and captive portal
+# sign-in stay, and so does the package installer.
+#
+# TeleService and TelephonyProvider go together: with the provider off, the
+# phone process crashes in a loop and the system restarts (checked with pm
+# disable).
+
+# Setup wizard: Kiosk Satellite's installer sets up what it would ask for.
+system_ext/priv-app/SetupWizard
+
+# Backup.
+system/priv-app/SharedStorageBackup
+product/priv-app/GoogleRestore
+
+# Telephony: the mirror has no modem.
+system/app/SimAppDialog
+system/priv-app/BlockedNumberProvider
+system/priv-app/MmsService
+system/priv-app/Telecom
+system/priv-app/TeleService
+system/priv-app/TelephonyProvider
+product/app/Messages
+product/priv-app/CarrierServices
+product/priv-app/GoogleDialer
+
+# Apps a kiosk does not open: print, bookmarks, calendar, camera, contacts,
+# the clock, music (MusicFX for upstream's AudioFX), the gallery, the
+# calculator, the browser, the recorder, the secure element, tracing.
+system/app/BookmarkProvider
+system/priv-app/BuiltInPrintService
+system/app/Camera2
+system/app/EasterEgg
+system/app/GooglePrintRecommendationService
+system/app/PrintSpooler
+system/app/SecureElement
+system/app/SoundRecorder
+system/app/Traceur
+system/priv-app/CalendarProvider
+system/priv-app/ContactsProvider
+system/priv-app/MusicFX
+product/app/CalculatorGoogle
+product/app/CalendarGoogle
+product/app/Chrome
+product/app/DeskClockGoogle
+product/app/GoogleContacts
+product/app/Photos
+product/app/TrichromeLibrary
+product/app/YTMusic
+
+# Google's services and apps, which upstream has none of.
+system/priv-app/TagGoogle
+system_ext/priv-app/GoogleFeedback
+system_ext/priv-app/GoogleOneTimeInitializer
+system_ext/priv-app/GoogleServicesFramework
+product/app/Drive
+product/app/Duo
+product/app/Gmail2
+product/app/GmsSampleIntegration
+product/app/GoogleContactsSyncAdapter
+product/app/GoogleLocationHistory
+product/app/GoogleTTS
+product/app/Keep
+product/app/Maps
+product/app/Videos
+product/app/WebViewGoogle
+product/app/YouTube
+product/app/talkback
+product/priv-app/AndroidAutoStub
+product/priv-app/ConfigUpdater
+product/priv-app/GmsCore
+product/priv-app/GooglePartnerSetup
+product/priv-app/Phonesky
+product/priv-app/Velvet
+product/priv-app/Wellbeing

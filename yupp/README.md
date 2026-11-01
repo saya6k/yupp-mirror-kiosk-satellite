@@ -55,6 +55,11 @@ es8388, AC108 USB mics, GPU, USB camera and Wi-Fi (BCM4354) work.
   upstream's Kiosk Satellite installer (`common/init/ks-install.sh`, run by `ks/yupp-ks.rc`)
   with an NDK-built curl (`scripts/build-curl.sh`), `bcmdhd.ko`, and portrait
   (`ro.surface_flinger.primary_display_orientation=ORIENTATION_270` in /vendor/build.prop).
+  Like upstream's Shows, the images ship LineageOS's Chromium WebView (`scripts/fetch-webview.sh`,
+  in place of Google's 90) and leave out what a kiosk never uses (`images/remove.txt`: upstream's
+  list by Radxa's names, and every Google app, which upstream has none of).
+- **Into the running mirror:** `scripts/push-super.sh system system_ext product vendor` writes
+  only the MiB that changed into super over adb, checks each partition whole, then reboots.
 - **Wi-Fi firmware crashes:** the AP6212's firmware traps now and then ("FIRMWARE HALTED : set
   BUS DOWN"), and Android 11 answers wlan0 going down by turning Wi-Fi off. `wifi/` turns it
   back on, which reloads the firmware.

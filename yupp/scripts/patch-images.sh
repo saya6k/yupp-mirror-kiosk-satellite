@@ -15,12 +15,16 @@
 #   /system/etc/init/yupp-ks.rc          runs it once Android has booted
 #   /system/etc/security/ca-bundle.pem   Android's cacerts in one file, for curl
 # product:
+#   /app/webview/webview.apk             LineageOS's Chromium WebView, as upstream's
+#                                        Shows ship it (fetch-webview.sh)
 #   /bin/curl                            which it needs (build-curl.sh); /product/bin
 #                                        comes first in Android's PATH
 # vendor:
 #   /lib/modules/bcmdhd.ko               Wi-Fi, built for our kernel (build-modules.sh)
 #   /build.prop                          portrait: the panel is mounted turned
 #                                        by 90 degrees (ORIENTATION_270)
+#
+# images/remove.txt lists the apps left out, as upstream leaves them out.
 #
 # The Wi-Fi name and passphrase come from the Armbian board's
 # wpa_supplicant-wlan0.conf; the filled-in script stays on the build SSD.
@@ -49,7 +53,7 @@ assert "'" not in ssid + passphrase, 'quote in the Wi-Fi name or passphrase'
 open(sys.argv[3], 'w').write(open(sys.argv[2]).read().replace('@SSID@', ssid).replace('@PSK@', passphrase))
 print('Wi-Fi:', ssid)
 PY
-for f in "$OUT/buttons/yupp-buttons" "$OUT/curl/curl" \
+for f in "$OUT/buttons/yupp-buttons" "$OUT/curl/curl" "$OUT/webview/webview.apk" \
         "$OUT/kernel/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/bcmdhd.ko"; do
     [ -f "$f" ] || { echo "missing $f" >&2; exit 1; }
     cp "$f" "$IN/"
@@ -58,9 +62,11 @@ cp "$HERE/remote/yupp-remote.rc" "$HERE/buttons/yupp-buttons.rc" "$HERE/ks/yupp-
     "$HERE/wifi/yupp-wifi-watch.rc" "$HERE/wifi/yupp-wifi-watch.sh" "$IN/"
 cp "$HERE/../common/init/ks-install.sh" "$IN/ks-install"
 cp "$HOME/.android/adbkey.pub" "$IN/adb_keys"
+grep -v -e '^#' -e '^$' "$HERE/images/remove.txt" >"$IN/remove.txt"
 cp "$WORK/radxa-rock4b-a11/parts/system.img" "$OUT/system-yupp.img"
 cp "$WORK/radxa-rock4b-a11/parts/vendor.img" "$OUT/vendor-yupp.img"
 cp "$WORK/radxa-rock4b-a11/parts/product.img" "$OUT/product-yupp.img"
+cp "$WORK/radxa-rock4b-a11/parts/system_ext.img" "$OUT/system_ext-yupp.img"
 
 cat >"$IN/run.sh" <<'RUN'
 set -e
@@ -80,6 +86,30 @@ ea_set -f /tmp/$7 $3 security.selinux
 CMDS
 }
 sys=/w/out/system-yupp.img in=/w/out/images-in
+prod=/w/out/product-yupp.img ext=/w/out/system_ext-yupp.img
+
+# rmtree IMAGE PATH: debugfs has no recursive rm.
+rmtree() {
+    debugfs -R "ls -p $2" "$1" 2>/dev/null | awk -F/ 'NF > 6 && $6 != "." && $6 != ".." { print substr($3, 1, 2), $6 }' |
+    while read type name; do
+        if [ "$type" = 04 ]; then rmtree "$1" "$2/$name"; else echo "rm $2/$name"; fi
+    done
+    echo "rmdir $2"
+}
+# remove.txt paths start with the partition: system/ is /system in the
+# system image (its root is /), system_ext/ and product/ are their images' roots.
+while read p; do
+    case $p in
+    system/*) img=$sys path=/$p ;;
+    system_ext/*) img=$ext path=/${p#system_ext/} ;;
+    product/*) img=$prod path=/${p#product/} ;;
+    esac
+    debugfs -R "stat $path" "$img" 2>/dev/null | grep -q Type: || { echo "not in the image: $p"; exit 1; }
+    rmtree "$img" "$path" >/tmp/rm.cmds
+    debugfs -w -f /tmp/rm.cmds "$img" >/dev/null 2>&1
+    debugfs -R "stat $path" "$img" 2>/dev/null | grep -q Type: && { echo "still there: $p"; exit 1; }
+done <$in/remove.txt
+echo "removed $(wc -l <$in/remove.txt) apps"
 put $sys /system/etc/init yupp-remote.rc $in/yupp-remote.rc 644 0 system_file
 put $sys /system/etc yupp-remote.sh $in/yupp-remote.sh 755 2000 system_file
 put $sys /system/etc/init yupp-wifi-watch.rc $in/yupp-wifi-watch.rc 644 0 system_file
@@ -93,15 +123,20 @@ mkdir -p /tmp/cacerts && debugfs -R "rdump /system/etc/security/cacerts /tmp/cac
 cat /tmp/cacerts/cacerts/* >/tmp/ca-bundle.pem
 put $sys /system/etc/security ca-bundle.pem /tmp/ca-bundle.pem 644 0 system_file
 
-prod=/w/out/product-yupp.img
-debugfs -w -f - $prod <<CMDS >/dev/null 2>&1
-mkdir /bin
-sif /bin mode 040755
-sif /bin uid 0
-sif /bin gid 2000
-ea_set -f /tmp/system_file /bin security.selinux
+# mkdir IMAGE DIR GID
+mkdir_() {
+    debugfs -w -f - "$1" <<CMDS >/dev/null 2>&1
+mkdir $2
+sif $2 mode 040755
+sif $2 uid 0
+sif $2 gid $3
+ea_set -f /tmp/system_file $2 security.selinux
 CMDS
+}
+mkdir_ $prod /bin 2000
 put $prod /bin curl $in/curl 755 2000 system_file
+mkdir_ $prod /app/webview 0
+put $prod /app/webview webview.apk $in/webview.apk 644 0 system_file
 
 ven=/w/out/vendor-yupp.img
 debugfs -R "dump /build.prop /tmp/build.prop" $ven 2>/dev/null
@@ -114,6 +149,7 @@ for f in /adb_keys /system/etc/init/yupp-remote.rc /system/etc/yupp-remote.sh \
         /system/etc/init/yupp-wifi-watch.rc /system/etc/yupp-wifi-watch.sh /system/bin/yupp-buttons \
         /system/etc/init/yupp-buttons.rc /system/bin/ks-install /system/etc/init/yupp-ks.rc \
         /system/etc/security/ca-bundle.pem "$prod:/bin" "$prod:/bin/curl" \
+        "$prod:/app/webview" "$prod:/app/webview/webview.apk" \
         "$ven:/build.prop" "$ven:/lib/modules/bcmdhd.ko"; do
     img=$sys; case $f in *:*) img=${f%%:*} f=${f#*:} ;; esac
     printf '%s ' "$f"; debugfs -R "stat $f" "$img" 2>/dev/null | grep -o -E "Mode: +[0-7]+|User: +[0-9]+ +Group: +[0-9]+|Size: [0-9]+" | tr '\n' ' '
@@ -121,11 +157,12 @@ for f in /adb_keys /system/etc/init/yupp-remote.rc /system/etc/yupp-remote.sh \
 done
 # A full image takes a write only in part, so compare what went in.
 debugfs -R "dump /bin/curl /tmp/curl" $prod 2>/dev/null
+debugfs -R "dump /app/webview/webview.apk /tmp/webview.apk" $prod 2>/dev/null
 debugfs -R "dump /system/etc/security/ca-bundle.pem /tmp/ca-bundle.out" $sys 2>/dev/null
 debugfs -R "dump /system/bin/yupp-buttons /tmp/yupp-buttons" $sys 2>/dev/null
 debugfs -R "dump /lib/modules/bcmdhd.ko /tmp/bcmdhd.ko" $ven 2>/dev/null
-cmp /tmp/curl $in/curl && cmp /tmp/ca-bundle.out /tmp/ca-bundle.pem && cmp /tmp/yupp-buttons $in/yupp-buttons &&
+cmp /tmp/curl $in/curl && cmp /tmp/webview.apk $in/webview.apk && cmp /tmp/ca-bundle.out /tmp/ca-bundle.pem && cmp /tmp/yupp-buttons $in/yupp-buttons &&
     cmp /tmp/bcmdhd.ko $in/bcmdhd.ko && echo "contents match"
-for img in $sys $prod $ven; do e2fsck -fn "$img" 2>&1 | tail -1; done
+for img in $sys $ext $prod $ven; do e2fsck -fn "$img" 2>&1 | tail -1; done
 RUN
 container run --rm -c 1 -m 1G --mount type=bind,source="$WORK",target=/w alpine:3.22 sh /w/out/images-in/run.sh 2>&1 | grep -v "^\["
