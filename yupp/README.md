@@ -72,7 +72,15 @@ es8388, AC108 USB mics, GPU, USB camera and Wi-Fi (BCM4354) work.
 The running mirror got these through `adb remount` (overlayfs) first, and Kiosk Satellite by
 hand (device owner, home launcher); `patch-images.sh` puts the same into the images.
 
-To do: cold-boot checks of the two-step loader, the power button (no event on GPIO0_A5).
+- **The power button does not reach the SoC.** The vendor tree has it as `rockchip-key`'s
+  power-key on GPIO0_A5, active low, as ours does (gpio-keys), and the path works: the pin
+  pulled down by hand brought up Android's power menu. But pressing the button (2026-11-01)
+  changed nothing on GPIO0_A5 with either pull, on any other GPIO bank, the SARADC, the RK808's
+  interrupt status (PWRON), the XR20M1172's GPIOs, or its UART A set up as the vendor did. The
+  pin follows whichever pull it is given, so nothing drives it: most likely the button's cable
+  is off, which takes opening the back to check.
+
+To do: more cold-boot checks of the two-step loader; the power button's wiring.
 
 ## First boot test (milestone 1)
 
