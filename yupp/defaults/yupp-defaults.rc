@@ -1,5 +1,5 @@
 # Settings the mirror starts with, set once on the first boot so that changing
-# them later sticks (yupp-defaults.sh).
+# them later sticks (yupp-defaults.sh); it runs on every boot.
 service yupp_defaults /system/bin/sh /system/etc/yupp-defaults.sh
     user root
     group root

@@ -12,3 +12,6 @@ once() {
 once bt svc bluetooth enable
 # Dark: a mirror shows black as glass; Radxa's image starts light.
 once dark cmd uimode night yes
+# Android 11 here keeps the choice (ui_night_mode) but boots light anyway, so
+# put a dark choice back in force on every boot.
+[ "$(settings get secure ui_night_mode)" = 2 ] && cmd uimode night yes

@@ -26,7 +26,10 @@
 #   /etc/firmware/config.txt             bcmdhd's settings: PM=0 keeps the chip's power
 #                                        save off (it put it back after every scan)
 #   /build.prop                          portrait: the panel is mounted turned
-#                                        by 90 degrees (ORIENTATION_270)
+#                                        by 90 degrees (ORIENTATION_270); the echo
+#                                        canceller's gain on the AC108 (0 dB)
+#   /lib/libyuppaec.so                   the echo canceller, preloaded into the
+#   /etc/init/yupp-aec.rc                audio HAL (build-aec.sh, aec/)
 #
 # images/remove.txt lists the apps left out, as upstream leaves them out.
 #
@@ -58,12 +61,12 @@ open(sys.argv[3], 'w').write(open(sys.argv[2]).read().replace('@SSID@', ssid).re
 print('Wi-Fi:', ssid)
 PY
 for f in "$OUT/buttons/yupp-buttons" "$OUT/curl/curl" "$OUT/webview/webview.apk" \
-        "$OUT/kernel/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/bcmdhd.ko"; do
+        "$OUT/kernel/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/bcmdhd.ko" "$OUT/aec/libyuppaec.so"; do
     [ -f "$f" ] || { echo "missing $f" >&2; exit 1; }
     cp "$f" "$IN/"
 done
 cp "$HERE/remote/yupp-remote.rc" "$HERE/buttons/yupp-buttons.rc" "$HERE/ks/yupp-ks.rc" "$HERE/defaults/yupp-defaults.rc" "$HERE/defaults/yupp-defaults.sh" \
-    "$HERE/wifi/yupp-wifi-watch.rc" "$HERE/wifi/yupp-wifi-watch.sh" "$HERE/wifi/config.txt" "$IN/"
+    "$HERE/wifi/yupp-wifi-watch.rc" "$HERE/wifi/yupp-wifi-watch.sh" "$HERE/wifi/config.txt" "$HERE/aec/yupp-aec.rc" "$IN/"
 cp "$HERE/../common/init/ks-install.sh" "$IN/ks-install"
 cp "$HOME/.android/adbkey.pub" "$IN/adb_keys"
 grep -v -e '^#' -e '^$' "$HERE/images/remove.txt" >"$IN/remove.txt"
@@ -75,7 +78,7 @@ cp "$WORK/radxa-rock4b-a11/parts/system_ext.img" "$OUT/system_ext-yupp.img"
 cat >"$IN/run.sh" <<'RUN'
 set -e
 apk add -q e2fsprogs e2fsprogs-extra >/dev/null
-for l in system_file adb_keys_file vendor_file; do printf 'u:object_r:%s:s0\0' $l >/tmp/$l; done
+for l in system_file adb_keys_file vendor_file vendor_configs_file; do printf 'u:object_r:%s:s0\0' $l >/tmp/$l; done
 
 # put IMAGE DIR NAME SOURCE MODE GID LABEL: replaces or adds DIR/NAME.
 put() {
@@ -148,16 +151,20 @@ ven=/w/out/vendor-yupp.img
 debugfs -R "dump /build.prop /tmp/build.prop" $ven 2>/dev/null
 sed -i '/^ro.surface_flinger.primary_display_orientation=/d' /tmp/build.prop
 echo ro.surface_flinger.primary_display_orientation=ORIENTATION_270 >>/tmp/build.prop
+sed -i '/^ro.vendor.amznaec.gain_db=/d' /tmp/build.prop
+echo ro.vendor.amznaec.gain_db=0 >>/tmp/build.prop
 put $ven / build.prop /tmp/build.prop 644 0 vendor_file
 put $ven /lib/modules bcmdhd.ko $in/bcmdhd.ko 644 0 vendor_file
 put $ven /etc/firmware config.txt $in/config.txt 644 0 vendor_file
+put $ven /lib libyuppaec.so $in/libyuppaec.so 644 0 vendor_file
+put $ven /etc/init yupp-aec.rc $in/yupp-aec.rc 644 0 vendor_configs_file
 
 for f in /adb_keys /system/etc/init/yupp-remote.rc /system/etc/yupp-remote.sh \
         /system/etc/init/yupp-wifi-watch.rc /system/etc/yupp-wifi-watch.sh /system/bin/yupp-buttons \
         /system/etc/init/yupp-buttons.rc /system/bin/ks-install /system/etc/init/yupp-ks.rc /system/etc/init/yupp-defaults.rc /system/etc/yupp-defaults.sh \
         /system/etc/security/ca-bundle.pem "$prod:/bin" "$prod:/bin/curl" \
         "$prod:/app/webview" "$prod:/app/webview/webview.apk" \
-        "$ven:/build.prop" "$ven:/lib/modules/bcmdhd.ko" "$ven:/etc/firmware/config.txt"; do
+        "$ven:/build.prop" "$ven:/lib/modules/bcmdhd.ko" "$ven:/etc/firmware/config.txt" "$ven:/lib/libyuppaec.so" "$ven:/etc/init/yupp-aec.rc"; do
     img=$sys; case $f in *:*) img=${f%%:*} f=${f#*:} ;; esac
     printf '%s ' "$f"; debugfs -R "stat $f" "$img" 2>/dev/null | grep -o -E "Mode: +[0-7]+|User: +[0-9]+ +Group: +[0-9]+|Size: [0-9]+" | tr '\n' ' '
     debugfs -R "ea_get $f security.selinux" "$img" 2>/dev/null | tr -d '\n'; echo
@@ -168,8 +175,9 @@ debugfs -R "dump /app/webview/webview.apk /tmp/webview.apk" $prod 2>/dev/null
 debugfs -R "dump /system/etc/security/ca-bundle.pem /tmp/ca-bundle.out" $sys 2>/dev/null
 debugfs -R "dump /system/bin/yupp-buttons /tmp/yupp-buttons" $sys 2>/dev/null
 debugfs -R "dump /lib/modules/bcmdhd.ko /tmp/bcmdhd.ko" $ven 2>/dev/null
+debugfs -R "dump /lib/libyuppaec.so /tmp/libyuppaec.so" $ven 2>/dev/null
 cmp /tmp/curl $in/curl && cmp /tmp/webview.apk $in/webview.apk && cmp /tmp/ca-bundle.out /tmp/ca-bundle.pem && cmp /tmp/yupp-buttons $in/yupp-buttons &&
-    cmp /tmp/bcmdhd.ko $in/bcmdhd.ko && echo "contents match"
+    cmp /tmp/bcmdhd.ko $in/bcmdhd.ko && cmp /tmp/libyuppaec.so $in/libyuppaec.so && echo "contents match"
 for img in $sys $ext $prod $ven; do e2fsck -fn "$img" 2>&1 | tail -1; done
 RUN
 container run --rm -c 1 -m 1G --mount type=bind,source="$WORK",target=/w alpine:3.22 sh /w/out/images-in/run.sh 2>&1 | grep -v "^\["

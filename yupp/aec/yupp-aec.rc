@@ -1,0 +1,17 @@
+# The audio HAL with the echo canceller preloaded (libyuppaec.so, built by
+# scripts/build-aec.sh from aec/yupp_aec_shim.cpp). As upstream's
+# init.kiosk-satellite.audio.rc: AOSP's definition from
+# android.hardware.audio.service.rc, which sorts first in /vendor/etc/init,
+# with the setenv added. setprop persist.vendor.amznaec.enable 0 and a restart
+# of the HAL pass the microphones through untouched.
+service vendor.audio-hal /vendor/bin/hw/android.hardware.audio.service
+    override
+    class hal
+    user audioserver
+    # media gid needed for /dev/fm (radio) and for /data/misc/media (tee)
+    group audio camera drmrpc inet media mediadrm net_bt net_bt_admin net_bw_acct wakelock context_hub
+    capabilities BLOCK_SUSPEND
+    ioprio rt 4
+    task_profiles ProcessCapacityHigh HighPerformance
+    onrestart restart audioserver
+    setenv LD_PRELOAD libyuppaec.so
