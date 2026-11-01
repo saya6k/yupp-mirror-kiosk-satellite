@@ -7,7 +7,7 @@
 #   /adb_keys                            this Mac's adb key
 #   /system/etc/init/yupp-remote.rc      adb on Wi-Fi, starts the script
 #   /system/etc/yupp-remote.sh           joins the mirror's Wi-Fi
-#   /system/etc/init/yupp-wifi-watch.rc  Wi-Fi back on after a firmware crash
+#   /system/etc/init/yupp-wifi-watch.rc  Wi-Fi back after a firmware crash
 #   /system/etc/yupp-wifi-watch.sh
 #   /system/bin/yupp-buttons             the buttons (build-buttons.sh)
 #   /system/etc/init/yupp-buttons.rc
