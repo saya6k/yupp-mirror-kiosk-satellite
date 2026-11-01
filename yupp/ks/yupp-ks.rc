@@ -1,0 +1,13 @@
+# Installs Kiosk Satellite on first boot and keeps its grants in place, with
+# upstream's installer (common/init/ks-install.sh, here /system/bin/ks-install)
+# as the Echos' init.kiosk-satellite.rc runs it. setprop persist.echo.ks_install 0
+# turns it off. It needs curl, which Radxa's Android has not (scripts/build-curl.sh).
+service yupp_ks_install /system/bin/ks-install
+    user root
+    group root
+    seclabel u:r:su:s0
+    disabled
+    oneshot
+
+on property:sys.boot_completed=1
+    start yupp_ks_install

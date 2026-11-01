@@ -50,20 +50,21 @@ es8388, AC108 USB mics, GPU, USB camera and Wi-Fi (BCM4354) work.
   strips it. Built with `scripts/repack-boot.py … --ramdisk=loader.cpio.gz --cmdline-append=…`.
 - **Kernel:** `scripts/build-kernel.sh` (Radxa IKCONFIG + ES8328_I2C + KEXEC + DEVMEM),
   `scripts/build-modules.sh` for `bcmdhd.ko` (Wi-Fi; the vendor's was built for Radxa's kernel).
-  On the mirror it is in /vendor/lib/modules through `adb remount` (overlayfs) for now.
+- **System and vendor:** `scripts/patch-images.sh` adds to copies of Radxa's images: Wi-Fi adb
+  (`remote/`), the buttons (`buttons/`, XR20M1172 over /dev/i2c-7, `scripts/build-buttons.sh`),
+  upstream's Kiosk Satellite installer (`common/init/ks-install.sh`, run by `ks/yupp-ks.rc`)
+  with an NDK-built curl (`scripts/build-curl.sh`), `bcmdhd.ko`, and portrait
+  (`ro.surface_flinger.primary_display_orientation=ORIENTATION_270` in /vendor/build.prop).
 - **Bring-up without a serial console:** `scripts/kexec-try.sh` (try a kernel/tree/ramdisk from
   the running Android; a hang is undone by a power cycle), `scripts/otg-try.sh` (an image in
   recovery, booted once through U-Boot with `diag/reboot-to recovery`), `diag/init` (writes a
   report to the backup partition). `adb reboot recovery` is not one-shot: it leaves a bootloader
   message in misc.
 
-Done through overlays (`adb remount`) for now: portrait (`ro.surface_flinger.primary_display_orientation=ORIENTATION_270`
-in /vendor/build.prop), buttons (`buttons/`, XR20M1172 over /dev/i2c-7), Kiosk Satellite
-(device owner, home launcher).
+The running mirror got these through `adb remount` (overlayfs) first, and Kiosk Satellite by
+hand (device owner, home launcher); `patch-images.sh` puts the same into the images.
 
-To do: cold-boot checks of the two-step loader, the power button (no event on GPIO0_A5), then
-a separate YUPP-mirror repo forked from lineageos-echo-kiosk-satellite (vendor taken from
-Radxa, our kernel/modules, the loader, the overlays above baked in).
+To do: cold-boot checks of the two-step loader, the power button (no event on GPIO0_A5).
 
 ## First boot test (milestone 1)
 
@@ -75,6 +76,7 @@ Radxa's Android 11 with the mirror's kernel and device tree, nothing else change
 | Device tree: `dts/rk3399-yupp-android.dts`, a delta on Radxa's decompiled `rockpi4b.dts` | `scripts/build-dtb.sh` | `rk3399-yupp-android.dtb` |
 | Boot image: kernel + DTB into Radxa's boot (header dtb and resource `rk-kernel.dtb`) | `scripts/repack-boot.py` (round-trips Radxa's own boot byte for byte) | `boot-yupp.img` |
 | SD image: Radxa GPT image, the mirror's own idbloader (sectors 64–4095 of its eMMC dump), the new boot | `scripts/make-sd-image.py` | `yupp-android11-test.img` |
+| System and vendor in super (`system=… vendor=…` to `make-sd-image.py`) | `scripts/patch-images.sh` | `system-yupp.img`, `vendor-yupp.img` |
 
 `scripts/fdtflat.py` flattens a DTB to `path:prop = value` lines for diffing.
 

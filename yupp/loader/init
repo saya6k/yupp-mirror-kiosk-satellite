@@ -42,8 +42,12 @@ log() {
     echo "yupp-loader: stage $stage: $*" >/dev/kmsg
     echo "$(cut -d' ' -f1 /proc/uptime) stage $stage: $*" >>/tmp/loader.log
     [ -n "$backup" ] && { echo YUPPLOADER; cat /tmp/loader.log; echo YUPPEND; } |
-        dd of="$backup" bs=4096 conv=sync,fsync 2>/dev/null
+        dd of="$backup" bs=4096 iflag=fullblock conv=sync,fsync 2>/dev/null
 }
+# Stage 2 carries on stage 1's log.
+[ $stage = 2 ] && [ -n "$backup" ] &&
+    dd if="$backup" bs=4096 count=4 2>/dev/null | tr -d '\0' | sed -n '/^YUPPLOADER$/,/^YUPPEND$/p' |
+    grep -v -e '^YUPPLOADER$' -e '^YUPPEND$' >/tmp/loader.log
 
 fallback() {
     log "$1, booting Android on this tree"

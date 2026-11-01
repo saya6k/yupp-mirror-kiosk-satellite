@@ -4,15 +4,15 @@ GPT image: the mirror's own idbloader (DRAM init and miniloader, sectors
 64-4095 of its eMMC, with its backup copies) in place of the Rock Pi's, and
 the boot partition replaced. Everything else, the GPT included, is Radxa's.
 
-With SYSTEM.img, that ext4 image (the same size) replaces the system
-partition inside super.
+Each NAME=IMAGE (system=out/system-yupp.img, vendor=out/vendor-yupp.img)
+replaces that partition inside super with IMAGE, which must be the same size.
 
-usage: make-sd-image.py RADXA.img VENDOR_HEADER_2M.img BOOT.img OUT.img [SYSTEM.img]
+usage: make-sd-image.py RADXA.img VENDOR_HEADER_2M.img BOOT.img OUT.img [NAME=IMAGE...]
 """
 import shutil, struct, sys
 
 radxa, header, boot, out = sys.argv[1:5]
-system = sys.argv[5] if len(sys.argv) > 5 else None
+logical = [a.split('=', 1) for a in sys.argv[5:]]
 
 
 # The byte offset and size of a logical partition in super, from its
@@ -57,10 +57,10 @@ assert len(b) <= count * 512, 'boot image larger than the partition'
 with open(out, 'r+b') as f:
     f.seek(64 * 512); f.write(idb)
     f.seek(first * 512); f.write(b + b'\0' * (count * 512 - len(b)))
-    if system:
-        off, size = lp_partition(f, gpt_partition(out, 'super')[0], 'system')
-        s = open(system, 'rb').read()
-        assert len(s) == size, 'system image is %d bytes, the partition %d' % (len(s), size)
+    for name, image in logical:
+        off, size = lp_partition(f, gpt_partition(out, 'super')[0], name)
+        s = open(image, 'rb').read()
+        assert len(s) == size, '%s image is %d bytes, the partition %d' % (name, len(s), size)
         f.seek(off); f.write(s)
-        print('system replaced at byte %d (%d bytes)' % (off, size))
+        print('%s replaced at byte %d (%d bytes)' % (name, off, size))
 print('%s: idbloader from %s, boot at sector %d (%d of %d bytes)' % (out, header, first, len(b), count * 512))
