@@ -20,7 +20,8 @@
 #
 # Anything failing falls back to Android on the tree running at that point.
 # Each step is logged to the start of the backup partition, which Android
-# never uses, so a run can be read back afterwards.
+# never uses, so a run can be read back afterwards (the one before it 16 KiB
+# in).
 /bin/busybox --install -s /bin
 export PATH=/bin
 mkdir -p /proc /sys /dev /tmp
@@ -44,7 +45,10 @@ log() {
     [ -n "$backup" ] && { echo YUPPLOADER; cat /tmp/loader.log; echo YUPPEND; } |
         dd of="$backup" bs=4096 iflag=fullblock conv=sync,fsync 2>/dev/null
 }
-# Stage 2 carries on stage 1's log.
+# Stage 1 keeps the last boot's log 16 KiB in, then starts a new one; stage 2
+# carries on stage 1's.
+[ $stage = 1 ] && [ -n "$backup" ] &&
+    dd if="$backup" of="$backup" bs=4096 count=4 seek=4 conv=notrunc,fsync 2>/dev/null
 [ $stage = 2 ] && [ -n "$backup" ] &&
     dd if="$backup" bs=4096 count=4 2>/dev/null | tr -d '\0' | sed -n '/^YUPPLOADER$/,/^YUPPEND$/p' |
     grep -v -e '^YUPPLOADER$' -e '^YUPPEND$' >/tmp/loader.log
@@ -96,13 +100,14 @@ if [ $stage = 1 ]; then
         cpio -o -H newc 2>/dev/null | gzip -1 >/tmp/next.rd) || fallback "repacking the ramdisk"
     initrd=/tmp/next.rd
 else
-    # Wait for the display to come up on this tree, then give it a moment.
+    # Wait for the display to come up on this tree, then let it run a while
+    # (after 2 s, Android still came up on the self test now and then).
     i=0
     while [ $i -lt 50 ] && [ "$(cat /sys/class/drm/card0-DSI-1/enabled 2>/dev/null)" != enabled ]; do
         sleep 0.2; i=$((i + 1))
     done
     log "display $(cat /sys/class/drm/card0-DSI-1/enabled 2>/dev/null) after $((i / 5)) s"
-    sleep 2
+    sleep 10
     cp /sys/firmware/fdt /tmp/next.dtb || fallback "no live tree"
     cmdline="$(sed -e 's/ *yupp.stage=2//' /proc/cmdline)"
     initrd=/android-ramdisk.img
