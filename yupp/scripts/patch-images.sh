@@ -19,6 +19,8 @@
 # product:
 #   /app/webview/webview.apk             LineageOS's Chromium WebView, as upstream's
 #                                        Shows ship it (fetch-webview.sh)
+#   /media/bootanimation.zip             upstream's Kiosk Satellite animation, for the
+#                                        mirror's screen (make-bootanimation.py)
 #   /bin/curl                            which it needs (build-curl.sh); /product/bin
 #                                        comes first in Android's PATH
 # vendor:
@@ -61,7 +63,7 @@ open(sys.argv[3], 'w').write(open(sys.argv[2]).read().replace('@SSID@', ssid).re
 print('Wi-Fi:', ssid)
 PY
 for f in "$OUT/buttons/yupp-buttons" "$OUT/curl/curl" "$OUT/webview/webview.apk" \
-        "$OUT/kernel/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/bcmdhd.ko" "$OUT/aec/libyuppaec.so"; do
+        "$OUT/kernel/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/bcmdhd.ko" "$OUT/aec/libyuppaec.so" "$OUT/bootanimation/bootanimation.zip"; do
     [ -f "$f" ] || { echo "missing $f" >&2; exit 1; }
     cp "$f" "$IN/"
 done
@@ -146,6 +148,8 @@ mkdir_ $prod /bin 2000
 put $prod /bin curl $in/curl 755 2000 system_file
 mkdir_ $prod /app/webview 0
 put $prod /app/webview webview.apk $in/webview.apk 644 0 system_file
+mkdir_ $prod /media 0
+put $prod /media bootanimation.zip $in/bootanimation.zip 644 0 system_file
 
 ven=/w/out/vendor-yupp.img
 debugfs -R "dump /build.prop /tmp/build.prop" $ven 2>/dev/null
@@ -163,7 +167,7 @@ for f in /adb_keys /system/etc/init/yupp-remote.rc /system/etc/yupp-remote.sh \
         /system/etc/init/yupp-wifi-watch.rc /system/etc/yupp-wifi-watch.sh /system/bin/yupp-buttons \
         /system/etc/init/yupp-buttons.rc /system/bin/ks-install /system/etc/init/yupp-ks.rc /system/etc/init/yupp-defaults.rc /system/etc/yupp-defaults.sh \
         /system/etc/security/ca-bundle.pem "$prod:/bin" "$prod:/bin/curl" \
-        "$prod:/app/webview" "$prod:/app/webview/webview.apk" \
+        "$prod:/app/webview" "$prod:/app/webview/webview.apk" "$prod:/media/bootanimation.zip" \
         "$ven:/build.prop" "$ven:/lib/modules/bcmdhd.ko" "$ven:/etc/firmware/config.txt" "$ven:/lib/libyuppaec.so" "$ven:/etc/init/yupp-aec.rc"; do
     img=$sys; case $f in *:*) img=${f%%:*} f=${f#*:} ;; esac
     printf '%s ' "$f"; debugfs -R "stat $f" "$img" 2>/dev/null | grep -o -E "Mode: +[0-7]+|User: +[0-9]+ +Group: +[0-9]+|Size: [0-9]+" | tr '\n' ' '
