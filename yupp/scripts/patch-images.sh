@@ -21,6 +21,8 @@
 #                                        comes first in Android's PATH
 # vendor:
 #   /lib/modules/bcmdhd.ko               Wi-Fi, built for our kernel (build-modules.sh)
+#   /etc/firmware/config.txt             bcmdhd's settings: PM=0 keeps the chip's power
+#                                        save off (it put it back after every scan)
 #   /build.prop                          portrait: the panel is mounted turned
 #                                        by 90 degrees (ORIENTATION_270)
 #
@@ -59,7 +61,7 @@ for f in "$OUT/buttons/yupp-buttons" "$OUT/curl/curl" "$OUT/webview/webview.apk"
     cp "$f" "$IN/"
 done
 cp "$HERE/remote/yupp-remote.rc" "$HERE/buttons/yupp-buttons.rc" "$HERE/ks/yupp-ks.rc" \
-    "$HERE/wifi/yupp-wifi-watch.rc" "$HERE/wifi/yupp-wifi-watch.sh" "$IN/"
+    "$HERE/wifi/yupp-wifi-watch.rc" "$HERE/wifi/yupp-wifi-watch.sh" "$HERE/wifi/config.txt" "$IN/"
 cp "$HERE/../common/init/ks-install.sh" "$IN/ks-install"
 cp "$HOME/.android/adbkey.pub" "$IN/adb_keys"
 grep -v -e '^#' -e '^$' "$HERE/images/remove.txt" >"$IN/remove.txt"
@@ -144,13 +146,14 @@ sed -i '/^ro.surface_flinger.primary_display_orientation=/d' /tmp/build.prop
 echo ro.surface_flinger.primary_display_orientation=ORIENTATION_270 >>/tmp/build.prop
 put $ven / build.prop /tmp/build.prop 644 0 vendor_file
 put $ven /lib/modules bcmdhd.ko $in/bcmdhd.ko 644 0 vendor_file
+put $ven /etc/firmware config.txt $in/config.txt 644 0 vendor_file
 
 for f in /adb_keys /system/etc/init/yupp-remote.rc /system/etc/yupp-remote.sh \
         /system/etc/init/yupp-wifi-watch.rc /system/etc/yupp-wifi-watch.sh /system/bin/yupp-buttons \
         /system/etc/init/yupp-buttons.rc /system/bin/ks-install /system/etc/init/yupp-ks.rc \
         /system/etc/security/ca-bundle.pem "$prod:/bin" "$prod:/bin/curl" \
         "$prod:/app/webview" "$prod:/app/webview/webview.apk" \
-        "$ven:/build.prop" "$ven:/lib/modules/bcmdhd.ko"; do
+        "$ven:/build.prop" "$ven:/lib/modules/bcmdhd.ko" "$ven:/etc/firmware/config.txt"; do
     img=$sys; case $f in *:*) img=${f%%:*} f=${f#*:} ;; esac
     printf '%s ' "$f"; debugfs -R "stat $f" "$img" 2>/dev/null | grep -o -E "Mode: +[0-7]+|User: +[0-9]+ +Group: +[0-9]+|Size: [0-9]+" | tr '\n' ' '
     debugfs -R "ea_get $f security.selinux" "$img" 2>/dev/null | tr -d '\n'; echo
