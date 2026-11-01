@@ -13,6 +13,7 @@
 #   /system/etc/init/yupp-buttons.rc
 #   /system/bin/ks-install               upstream's Kiosk Satellite installer
 #   /system/etc/init/yupp-ks.rc          runs it once Android has booted
+#   /system/etc/init/yupp-bt.rc          Bluetooth on, on the first boot
 #   /system/etc/security/ca-bundle.pem   Android's cacerts in one file, for curl
 # product:
 #   /app/webview/webview.apk             LineageOS's Chromium WebView, as upstream's
@@ -60,7 +61,7 @@ for f in "$OUT/buttons/yupp-buttons" "$OUT/curl/curl" "$OUT/webview/webview.apk"
     [ -f "$f" ] || { echo "missing $f" >&2; exit 1; }
     cp "$f" "$IN/"
 done
-cp "$HERE/remote/yupp-remote.rc" "$HERE/buttons/yupp-buttons.rc" "$HERE/ks/yupp-ks.rc" \
+cp "$HERE/remote/yupp-remote.rc" "$HERE/buttons/yupp-buttons.rc" "$HERE/ks/yupp-ks.rc" "$HERE/bluetooth/yupp-bt.rc" \
     "$HERE/wifi/yupp-wifi-watch.rc" "$HERE/wifi/yupp-wifi-watch.sh" "$HERE/wifi/config.txt" "$IN/"
 cp "$HERE/../common/init/ks-install.sh" "$IN/ks-install"
 cp "$HOME/.android/adbkey.pub" "$IN/adb_keys"
@@ -121,6 +122,7 @@ put $sys /system/bin yupp-buttons $in/yupp-buttons 755 2000 system_file
 put $sys /system/etc/init yupp-buttons.rc $in/yupp-buttons.rc 644 0 system_file
 put $sys /system/bin ks-install $in/ks-install 755 2000 system_file
 put $sys /system/etc/init yupp-ks.rc $in/yupp-ks.rc 644 0 system_file
+put $sys /system/etc/init yupp-bt.rc $in/yupp-bt.rc 644 0 system_file
 mkdir -p /tmp/cacerts && debugfs -R "rdump /system/etc/security/cacerts /tmp/cacerts" $sys 2>/dev/null
 cat /tmp/cacerts/cacerts/* >/tmp/ca-bundle.pem
 put $sys /system/etc/security ca-bundle.pem /tmp/ca-bundle.pem 644 0 system_file
@@ -150,7 +152,7 @@ put $ven /etc/firmware config.txt $in/config.txt 644 0 vendor_file
 
 for f in /adb_keys /system/etc/init/yupp-remote.rc /system/etc/yupp-remote.sh \
         /system/etc/init/yupp-wifi-watch.rc /system/etc/yupp-wifi-watch.sh /system/bin/yupp-buttons \
-        /system/etc/init/yupp-buttons.rc /system/bin/ks-install /system/etc/init/yupp-ks.rc \
+        /system/etc/init/yupp-buttons.rc /system/bin/ks-install /system/etc/init/yupp-ks.rc /system/etc/init/yupp-bt.rc \
         /system/etc/security/ca-bundle.pem "$prod:/bin" "$prod:/bin/curl" \
         "$prod:/app/webview" "$prod:/app/webview/webview.apk" \
         "$ven:/build.prop" "$ven:/lib/modules/bcmdhd.ko" "$ven:/etc/firmware/config.txt"; do
