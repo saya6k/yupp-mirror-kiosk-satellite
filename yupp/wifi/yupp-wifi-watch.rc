@@ -1,0 +1,9 @@
+# Wi-Fi back on after a firmware crash (yupp-wifi-watch.sh).
+service yupp_wifi_watch /system/bin/sh /system/etc/yupp-wifi-watch.sh
+    user root
+    group root
+    seclabel u:r:su:s0
+    disabled
+
+on property:sys.boot_completed=1
+    start yupp_wifi_watch

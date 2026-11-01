@@ -55,6 +55,9 @@ es8388, AC108 USB mics, GPU, USB camera and Wi-Fi (BCM4354) work.
   upstream's Kiosk Satellite installer (`common/init/ks-install.sh`, run by `ks/yupp-ks.rc`)
   with an NDK-built curl (`scripts/build-curl.sh`), `bcmdhd.ko`, and portrait
   (`ro.surface_flinger.primary_display_orientation=ORIENTATION_270` in /vendor/build.prop).
+- **Wi-Fi firmware crashes:** the AP6212's firmware traps now and then ("FIRMWARE HALTED : set
+  BUS DOWN"), and Android 11 answers wlan0 going down by turning Wi-Fi off. `wifi/` turns it
+  back on, which reloads the firmware.
 - **Bring-up without a serial console:** `scripts/kexec-try.sh` (try a kernel/tree/ramdisk from
   the running Android; a hang is undone by a power cycle), `scripts/otg-try.sh` (an image in
   recovery, booted once through U-Boot with `diag/reboot-to recovery`), `diag/init` (writes a

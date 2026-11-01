@@ -7,6 +7,8 @@
 #   /adb_keys                            this Mac's adb key
 #   /system/etc/init/yupp-remote.rc      adb on Wi-Fi, starts the script
 #   /system/etc/yupp-remote.sh           joins the mirror's Wi-Fi
+#   /system/etc/init/yupp-wifi-watch.rc  Wi-Fi back on after a firmware crash
+#   /system/etc/yupp-wifi-watch.sh
 #   /system/bin/yupp-buttons             the buttons (build-buttons.sh)
 #   /system/etc/init/yupp-buttons.rc
 #   /system/bin/ks-install               upstream's Kiosk Satellite installer
@@ -52,7 +54,8 @@ for f in "$OUT/buttons/yupp-buttons" "$OUT/curl/curl" \
     [ -f "$f" ] || { echo "missing $f" >&2; exit 1; }
     cp "$f" "$IN/"
 done
-cp "$HERE/remote/yupp-remote.rc" "$HERE/buttons/yupp-buttons.rc" "$HERE/ks/yupp-ks.rc" "$IN/"
+cp "$HERE/remote/yupp-remote.rc" "$HERE/buttons/yupp-buttons.rc" "$HERE/ks/yupp-ks.rc" \
+    "$HERE/wifi/yupp-wifi-watch.rc" "$HERE/wifi/yupp-wifi-watch.sh" "$IN/"
 cp "$HERE/../common/init/ks-install.sh" "$IN/ks-install"
 cp "$HOME/.android/adbkey.pub" "$IN/adb_keys"
 cp "$WORK/radxa-rock4b-a11/parts/system.img" "$OUT/system-yupp.img"
@@ -79,6 +82,8 @@ CMDS
 sys=/w/out/system-yupp.img in=/w/out/images-in
 put $sys /system/etc/init yupp-remote.rc $in/yupp-remote.rc 644 0 system_file
 put $sys /system/etc yupp-remote.sh $in/yupp-remote.sh 755 2000 system_file
+put $sys /system/etc/init yupp-wifi-watch.rc $in/yupp-wifi-watch.rc 644 0 system_file
+put $sys /system/etc yupp-wifi-watch.sh $in/yupp-wifi-watch.sh 755 2000 system_file
 put $sys / adb_keys $in/adb_keys 644 0 adb_keys_file
 put $sys /system/bin yupp-buttons $in/yupp-buttons 755 2000 system_file
 put $sys /system/etc/init yupp-buttons.rc $in/yupp-buttons.rc 644 0 system_file
@@ -105,7 +110,8 @@ echo ro.surface_flinger.primary_display_orientation=ORIENTATION_270 >>/tmp/build
 put $ven / build.prop /tmp/build.prop 644 0 vendor_file
 put $ven /lib/modules bcmdhd.ko $in/bcmdhd.ko 644 0 vendor_file
 
-for f in /adb_keys /system/etc/init/yupp-remote.rc /system/etc/yupp-remote.sh /system/bin/yupp-buttons \
+for f in /adb_keys /system/etc/init/yupp-remote.rc /system/etc/yupp-remote.sh \
+        /system/etc/init/yupp-wifi-watch.rc /system/etc/yupp-wifi-watch.sh /system/bin/yupp-buttons \
         /system/etc/init/yupp-buttons.rc /system/bin/ks-install /system/etc/init/yupp-ks.rc \
         /system/etc/security/ca-bundle.pem "$prod:/bin" "$prod:/bin/curl" \
         "$ven:/build.prop" "$ven:/lib/modules/bcmdhd.ko"; do
