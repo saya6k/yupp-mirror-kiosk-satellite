@@ -159,6 +159,12 @@ sed -i '/^ro.surface_flinger.primary_display_orientation=/d' /tmp/build.prop
 echo ro.surface_flinger.primary_display_orientation=ORIENTATION_270 >>/tmp/build.prop
 sed -i '/^ro.vendor.amznaec.gain_db=/d' /tmp/build.prop
 echo ro.vendor.amznaec.gain_db=0 >>/tmp/build.prop
+# As upstream's Echo images since 2026.10.6: Kiosk Satellite (2026.11.1+)
+# cancels the echo itself (GTCRN) and needs the microphones raw, at a fixed
+# echo delay. libyuppaec.so stays loaded but passes them through;
+# persist.vendor.amznaec.enable 1 and a restart of the HAL bring it back.
+sed -i '/^ro.vendor.amznaec.enable=/d' /tmp/build.prop
+echo ro.vendor.amznaec.enable=0 >>/tmp/build.prop
 put $ven / build.prop /tmp/build.prop 644 0 vendor_file
 put $ven /lib/modules bcmdhd.ko $in/bcmdhd.ko 644 0 vendor_file
 put $ven /etc/firmware config.txt $in/config.txt 644 0 vendor_file
