@@ -9,3 +9,10 @@ service yupp_defaults /system/bin/sh /system/etc/yupp-defaults.sh
 
 on property:sys.boot_completed=1
     start yupp_defaults
+
+# The kernel (Radxa's config) has CONFIG_TEST_POWER=y, whose dummy battery
+# reads 50% and makes Kiosk Satellite report a battery the mirror does not
+# have. Take it away before Kiosk Satellite starts; the dummy mains supply
+# stays online.
+on early-boot
+    write /sys/module/test_power/parameters/battery_present false
