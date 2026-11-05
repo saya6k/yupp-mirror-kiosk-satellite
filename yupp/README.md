@@ -60,9 +60,13 @@ es8388, AC108 USB mics, GPU, USB camera and Wi-Fi (BCM4354) work.
   list by Radxa's names, and every Google app, which upstream has none of).
 - **Into the running mirror:** `scripts/push-super.sh system system_ext product vendor` writes
   only the MiB that changed into super over adb, checks each partition whole, then reboots.
-- **Wi-Fi firmware crashes:** the AP6212's firmware traps now and then ("FIRMWARE HALTED : set
-  BUS DOWN"), and Android 11 answers wlan0 going down by turning Wi-Fi off. `wifi/` turns it
-  back on, which reloads the firmware.
+- **Wi-Fi firmware crashes:** Radxa's AP6212 firmware (7.45.96.76, Synaptics build) crashed
+  itself every 10-40 minutes ("FIRMWARE HALTED : set BUS DOWN", always TRAP c at pc 0x14494).
+  At boot it looks for a licence key in the chip's OTP; without one, its watchdog writes to
+  address 0 at random (1 in 1000 per second) once it has been up 10 minutes. Clock, pin drive
+  and PM made no difference. `patch-images.sh` patches the check (0x53a8 answers 0). Android 11
+  answers wlan0 going down by turning Wi-Fi off, so `wifi/` still turns it back on if the
+  firmware dies for another reason.
 - **Bring-up without a serial console:** `scripts/kexec-try.sh` (try a kernel/tree/ramdisk from
   the running Android; a hang is undone by a power cycle), `scripts/otg-try.sh` (an image in
   recovery, booted once through U-Boot with `diag/reboot-to recovery`), `diag/init` (writes a

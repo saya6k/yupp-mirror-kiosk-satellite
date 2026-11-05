@@ -27,6 +27,8 @@
 #   /lib/modules/bcmdhd.ko               Wi-Fi, built for our kernel (build-modules.sh)
 #   /etc/firmware/config.txt             bcmdhd's settings: PM=0 keeps the chip's power
 #                                        save off (it put it back after every scan)
+#   /etc/firmware/fw_bcm43438a1.bin      Radxa's, with its deliberate crash for chips
+#   /etc/firmware/fw_bcm43438a1_apsta.bin without a licence key turned off
 #   /build.prop                          portrait: the panel is mounted turned
 #                                        by 90 degrees (ORIENTATION_270); the echo
 #                                        canceller's gain on the AC108 (0 dB)
@@ -157,9 +159,28 @@ sed -i '/^ro.surface_flinger.primary_display_orientation=/d' /tmp/build.prop
 echo ro.surface_flinger.primary_display_orientation=ORIENTATION_270 >>/tmp/build.prop
 sed -i '/^ro.vendor.amznaec.gain_db=/d' /tmp/build.prop
 echo ro.vendor.amznaec.gain_db=0 >>/tmp/build.prop
+# As upstream's Echo images since 2026.10.6: Kiosk Satellite (2026.11.1+)
+# cancels the echo itself (GTCRN) and needs the microphones raw, at a fixed
+# echo delay. libyuppaec.so stays loaded but passes them through;
+# persist.vendor.amznaec.enable 1 and a restart of the HAL bring it back.
+sed -i '/^ro.vendor.amznaec.enable=/d' /tmp/build.prop
+echo ro.vendor.amznaec.enable=0 >>/tmp/build.prop
 put $ven / build.prop /tmp/build.prop 644 0 vendor_file
 put $ven /lib/modules bcmdhd.ko $in/bcmdhd.ko 644 0 vendor_file
 put $ven /etc/firmware config.txt $in/config.txt 644 0 vendor_file
+# Radxa's AP6212 firmware (7.45.96.76, Synaptics build) reads a licence key from
+# the chip's OTP at boot. Without it (our module), its watchdog crashes the
+# firmware on purpose: once up for 10 minutes, every second a random number
+# ending in 888 (1 in 1000) means "internal error" and a write to address 0
+# (TRAP c @ pc 0x14494). The function that reports "no licence" (0x53a8) now
+# answers 0: movs r0, #0; bx lr. The _apsta file is the same binary.
+for fw in fw_bcm43438a1.bin fw_bcm43438a1_apsta.bin; do
+    debugfs -R "dump /etc/firmware/$fw /tmp/$fw" $ven 2>/dev/null
+    echo "0c34a106190ca071732ee5e2f8ebbb6e4c6b912a  /tmp/$fw" | sha1sum -c -s || { echo "unexpected $fw"; exit 1; }
+    printf '\000\040\160\107' | dd of=/tmp/$fw bs=1 seek=$((0x53a8)) conv=notrunc 2>/dev/null
+    echo "d2ec1c774ce1d67162c7446b8e18f5561b9eea4f  /tmp/$fw" | sha1sum -c -s || { echo "patching $fw failed"; exit 1; }
+    put $ven /etc/firmware $fw /tmp/$fw 644 0 vendor_configs_file
+done
 put $ven /lib libyuppaec.so $in/libyuppaec.so 644 0 vendor_file
 put $ven /etc/init yupp-aec.rc $in/yupp-aec.rc 644 0 vendor_configs_file
 
@@ -168,7 +189,8 @@ for f in /adb_keys /system/etc/init/yupp-remote.rc /system/etc/yupp-remote.sh \
         /system/etc/init/yupp-buttons.rc /system/bin/ks-install /system/etc/init/yupp-ks.rc /system/etc/init/yupp-defaults.rc /system/etc/yupp-defaults.sh \
         /system/etc/security/ca-bundle.pem "$prod:/bin" "$prod:/bin/curl" \
         "$prod:/app/webview" "$prod:/app/webview/webview.apk" "$prod:/media/bootanimation.zip" \
-        "$ven:/build.prop" "$ven:/lib/modules/bcmdhd.ko" "$ven:/etc/firmware/config.txt" "$ven:/lib/libyuppaec.so" "$ven:/etc/init/yupp-aec.rc"; do
+        "$ven:/build.prop" "$ven:/lib/modules/bcmdhd.ko" "$ven:/etc/firmware/config.txt" \
+        "$ven:/etc/firmware/fw_bcm43438a1.bin" "$ven:/etc/firmware/fw_bcm43438a1_apsta.bin" "$ven:/lib/libyuppaec.so" "$ven:/etc/init/yupp-aec.rc"; do
     img=$sys; case $f in *:*) img=${f%%:*} f=${f#*:} ;; esac
     printf '%s ' "$f"; debugfs -R "stat $f" "$img" 2>/dev/null | grep -o -E "Mode: +[0-7]+|User: +[0-9]+ +Group: +[0-9]+|Size: [0-9]+" | tr '\n' ' '
     debugfs -R "ea_get $f security.selinux" "$img" 2>/dev/null | tr -d '\n'; echo
